@@ -1,0 +1,290 @@
+<html>
+    <body>
+        <!-- <span id="Tip" class="tip">dom(0, 0), reality(0, 0)</span> -->
+        <!-- <div id="Ball" class="ball">
+        </div> -->
+        <script type="text/javascript">
+        (function(){
+            const body = document.body;
+            let balls = [];
+            // const tip = document.getElementById("Tip");
+            const msPerFrame = 17;
+            const gravity = 9.8;
+            const rubRate = 30;
+            let interval = null;
+            let currenDragBall = null;
+
+            class Ball {
+                constructor(dom) {
+                    this.dom = dom;
+                    this.isDraging = false;
+                    this.tragStartTime = 0;
+                    this.lastX = 0;
+                    this.lastY = 0;
+                    this.xSpeed = 0;
+                    this.ySpeed = 0;
+                    this.time = 0;
+                    this.leftOffset = 0;
+                    this.topOffset = 0;
+                }
+
+                // 中心点坐标
+                getCirclePivotPos() {
+                    return {
+                        x: this.dom.offsetLeft + .5*this.dom.offsetWidth,
+                        y: this.dom.offsetTop + .5*this.dom.offsetHeight,
+                    };
+                }
+
+                getCircleRadius() {
+                    // const x0 = this.dom.offsetLeft;
+                    // const y0 = this.dom.offsetTop;
+                    // const x1 = this.dom.offsetLeft + this.dom.offsetWidth;
+                    // const y1 = this.dom.offsetTop +this.dom.offsetHeight;
+                    // return Math.sqrt((x0-x1)*(x0-x1) + (y0-y1)*(y0-y1))/2;
+                    return .5*this.dom.offsetWidth;
+                }
+
+                onmousemove = (e) => 
+                {
+                    const {clientX, clientY} = e;
+                    if (this.isDraging) {
+                        this.dom.style.left = clientX-this.leftOffset;
+                        this.dom.style.top = clientY-this.topOffset;
+                    }
+                };
+
+                onmousedown = (e) => 
+                {
+                    const {clientX, clientY} = e;
+                    if (clientX>=this.dom.offsetLeft 
+                        && clientX <= (this.dom.offsetLeft + this.dom.offsetWidth) 
+                        && clientY >= this.dom.offsetTop 
+                        && clientY <= (this.dom.offsetTop + this.dom.offsetHeight)) {
+
+                        this.isDraging = true;
+                        
+                        this.leftOffset = clientX-this.dom.offsetLeft;
+                        this.topOffset = clientY-this.dom.offsetTop;
+
+                        this.tragStartTime = Date.now();
+                        this.lastX = this.dom.offsetLeft;
+                        this.lastY = this.dom.offsetTop;
+                        console.log("mouse down");
+                    }
+                };
+
+                onmouseup = (e) => 
+                {
+                    const {clientX, clientY} = e;
+                    this.isDraging = false;
+                    this.time = 0;
+
+                    let dragTotalTime = (Date.now()-this.tragStartTime)/1000;
+                    this.xSpeed = (this.dom.offsetLeft-this.lastX)/dragTotalTime;
+                    this.ySpeed = (this.dom.offsetTop-this.lastY)/dragTotalTime;
+                    console.log("mouse up");
+                }
+
+                verticalMove = (confilictBalls) => 
+                {
+                    for (let otherBall of confilictBalls) {
+                        this.ySpeed += .7*otherBall.ySpeed;
+                        otherBall.ySpeed = 0.3*otherBall.ySpeed;
+                    }
+                    let {x, y} = this.transDom2Reality(this.dom.offsetLeft, this.dom.offsetTop);
+                    // console.log("vertical move y", y);
+                    if (y<=0) {
+                        this.time = 0;
+                        this.ySpeed = 0;
+                        this.dom.style.top = this.transReality2Dom(x, 0).y;
+                        return;
+                    }
+                    this.time += msPerFrame;
+                    let nY = 0;
+                    if (this.ySpeed==0) {
+                        nY = y - calcFallHeight(this.time/1000, gravity)
+                    } else {
+                        let nYSpeed = transDomYSpead2Reality(this.ySpeed);
+                        nY = y + nYSpeed*msPerFrame/1000 - calcFallHeight(this.time/1000, gravity);
+                        if (nYSpeed>0) {
+                            nYSpeed -= (gravity*msPerFrame/1000);
+                            if (nYSpeed <= 0)
+                                nYSpeed = 0;
+                        } else {
+                            nYSpeed += (gravity*msPerFrame/1000);
+                            if (nYSpeed >= 0)
+                                nYSpeed = 0;
+                        }
+                        
+                    }
+
+                    this.dom.style.top = this.transReality2Dom(x, nY).y;
+
+                };
+
+                horizontalMove = (confilictBalls) => 
+                {
+                    // tip.innerText = (`dom(${ball.offsetLeft}, ${ball.offsetTop}), reality(${ball.offsetLeft}, ${transDom2Reality(ball.offsetLeft, ball.offsetTop).y})`);
+                    for (let otherBall of confilictBalls) {
+                        this.xSpeed += (.7*otherBall.xSpeed);
+                        otherBall.xSpeed = 0-.2*otherBall.xSpeed;
+                    }
+
+                    if (this.dom.offsetLeft<=0) {
+                        this.xSpeed = (0 -.3*this.xSpeed);
+                        // this.dom.style.left = 0;
+                        // return;
+                    }
+                    if (this.dom.offsetLeft+this.dom.offsetWidth >= body.clientWidth) {
+                        this.xSpeed = (0 - .3*this.xSpeed);
+                        // this.dom.style.left = body.clientWidth-this.dom.offsetWidth;
+                        // return;
+                    }
+                    let {x, y} = this.transDom2Reality(this.dom.offsetLeft, this.dom.offsetTop);
+                    let nLeft = this.dom.offsetLeft+((msPerFrame/1000)*this.xSpeed);
+                    if (nLeft<0)
+                        nLeft = 0;
+                    if (nLeft+this.dom.offsetWidth > body.clientWidth)
+                        nLeft = body.clientWidth-this.dom.offsetWidth;
+                    this.dom.style.left = nLeft;
+
+                    if (y<=0 && this.xSpeed) {
+                        // console.log("摩擦", this.xSpeed);
+                        this.xSpeed = this.xSpeed>0 ? this.xSpeed-(msPerFrame/1000)*rubRate : this.xSpeed+(msPerFrame/1000)*rubRate;
+                        if (Math.abs(this.xSpeed)<=0.5)
+                            this.xSpeed = 0;
+                    }
+                };
+
+                onUpdate = (confilictBalls) => 
+                {
+                    if (this.isDraging)
+                        return;
+                    this.verticalMove(confilictBalls);
+                    this.horizontalMove(confilictBalls);
+                };
+
+                transDom2Reality = (x, y) => 
+                {
+                    return {
+                        x: x,
+                        y: body.clientHeight-y-this.dom.offsetHeight,
+                    };
+                }
+
+                transReality2Dom = (x, y) => {
+                    return {
+                        x: x,
+                        y: body.clientHeight - (y+this.dom.offsetHeight),
+                    }
+                }
+            }
+
+            body.onmousemove = function(e) {
+                
+                for (let ball of balls) {
+                    if (currenDragBall == ball) {
+                        ball.onmousemove(e);
+                        return;
+                    }
+                }
+            }
+            body.onmousedown = function(e) {
+                const { clientX, clientY } = e;
+                
+                for (let ball of balls) {
+                    if (clientX>=ball.dom.offsetLeft 
+                        && clientX <= (ball.dom.offsetLeft + ball.dom.offsetWidth) 
+                        && clientY >= ball.dom.offsetTop 
+                        && clientY <= (ball.dom.offsetTop + ball.dom.offsetHeight)) {
+                            currenDragBall = ball;
+                            ball.onmousedown(e);
+                            return;
+                        }
+                }
+                currenDragBall = null;
+            }
+            body.onmouseup = function(e) {
+                for (let ball of balls) {
+                    if (currenDragBall == ball) {
+                        ball.onmouseup(e);
+                        return;
+                    }
+                }
+            }
+
+            function calcFallHeight(t, g) {
+                return .5*g*t*t;
+            }
+            function transDomYSpead2Reality(ySpeed) {
+                return -ySpeed;
+            }
+
+            function createBall(x=0, y=0) {
+                let ballDom = document.createElement('div');
+                ballDom.className = 'ball';
+                ballDom.style.left = x;
+                ballDom.style.top = y;
+                body.appendChild(ballDom);
+                return new Ball(ballDom);
+            }
+
+            function getDistance(pos0, pos1) {
+                return Math.sqrt((pos0.x-pos1.x)*(pos0.x-pos1.x) + (pos0.y-pos1.y)*(pos0.y-pos1.y));
+            }
+
+            function isConfilict(ball0, ball1) {
+                const pivoitPos0 = ball0.getCirclePivotPos();
+                const pivoitPos1 = ball1.getCirclePivotPos();
+                return getDistance(pivoitPos0, pivoitPos1) <= (ball0.getCircleRadius()+ball1.getCircleRadius());
+            }
+
+            function start() {
+                balls.push(createBall(0, 0));
+                balls.push(createBall(200, 0));
+                balls.push(createBall(400, 0));
+                balls.push(createBall(500, 0));
+                interval = setInterval(function() {
+                    for (let ball of balls) {
+                        let confilictBalls = [];
+                        for (let b of balls) {
+                            if (b==ball)
+                                continue;
+                            if (isConfilict(ball, b)) {
+                                confilictBalls.push(b);
+                            }
+                        }
+                        ball.onUpdate(confilictBalls);
+                    }
+                }, msPerFrame);
+            } 
+            start();
+
+        })();
+        </script>
+    </body>
+</html>
+<style>
+    body {
+        padding: 0;
+        margin: 0;
+        overflow: hidden;
+    }
+    .ball {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 50px;
+        height: 50px;
+        background: gray;
+    }
+    .ball:active {
+        background: chocolate;
+    }
+    .tip {
+        position: absolute;
+        font-size: 16px;
+        color: limegreen;
+    }
+</style>
