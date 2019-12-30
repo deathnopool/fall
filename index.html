@@ -45,7 +45,7 @@
                     return .5*this.dom.offsetWidth;
                 }
 
-                onmousemove = (e) => 
+                onmousemove(e)
                 {
                     const {clientX, clientY} = e;
                     if (this.isDraging) {
@@ -54,7 +54,7 @@
                     }
                 };
 
-                onmousedown = (e) => 
+                onmousedown(e)
                 {
                     const {clientX, clientY} = e;
                     if (clientX>=this.dom.offsetLeft 
@@ -74,19 +74,21 @@
                     }
                 };
 
-                onmouseup = (e) => 
+                onmouseup(e)
                 {
+                    console.log("mouse up");
                     const {clientX, clientY} = e;
                     this.isDraging = false;
                     this.time = 0;
 
                     let dragTotalTime = (Date.now()-this.tragStartTime)/1000;
+                    if (dragTotalTime >= 0.5)
+                        return;
                     this.xSpeed = (this.dom.offsetLeft-this.lastX)/dragTotalTime;
                     this.ySpeed = (this.dom.offsetTop-this.lastY)/dragTotalTime;
-                    console.log("mouse up");
                 }
 
-                verticalMove = (confilictBalls) => 
+                verticalMove(confilictBalls)
                 {
                     for (let otherBall of confilictBalls) {
                         this.ySpeed += .7*otherBall.ySpeed;
@@ -123,7 +125,7 @@
 
                 };
 
-                horizontalMove = (confilictBalls) => 
+                horizontalMove(confilictBalls) 
                 {
                     // tip.innerText = (`dom(${ball.offsetLeft}, ${ball.offsetTop}), reality(${ball.offsetLeft}, ${transDom2Reality(ball.offsetLeft, ball.offsetTop).y})`);
                     for (let otherBall of confilictBalls) {
@@ -157,7 +159,7 @@
                     }
                 };
 
-                onUpdate = (confilictBalls) => 
+                onUpdate(confilictBalls)
                 {
                     if (this.isDraging)
                         return;
@@ -165,7 +167,7 @@
                     this.horizontalMove(confilictBalls);
                 };
 
-                transDom2Reality = (x, y) => 
+                transDom2Reality(x, y)
                 {
                     return {
                         x: x,
@@ -173,7 +175,7 @@
                     };
                 }
 
-                transReality2Dom = (x, y) => {
+                transReality2Dom(x, y){
                     return {
                         x: x,
                         y: body.clientHeight - (y+this.dom.offsetHeight),
@@ -277,11 +279,15 @@
         left: 0;
         width: 50px;
         height: 50px;
-        background: gray;
+        background: #666;
+        border-radius: 5px;
+        cursor: -webkit-grab;
     }
     .ball:active {
-        background: chocolate;
+        background: rgba(108, 145, 180, 0.8);
+        z-index: 99;
     }
+
     .tip {
         position: absolute;
         font-size: 16px;
