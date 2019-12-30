@@ -1,2 +1,2 @@
 # fall
-[see here](https://github.com/deathnopool/fall/blob/master/fall.html)
+[see here](https://deathnopool.github.io/fall/)
