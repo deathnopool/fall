@@ -5,12 +5,14 @@
         </div> -->
         <script type="text/javascript">
         (function(){
+            const MS_PER_FRAME = 17;
+            const FRAME_PERIOD = MS_PER_FRAME/1000;
+            const G = 9.8;
+            const RUB_RATE = 30;
+
             const body = document.body;
             let balls = [];
             // const tip = document.getElementById("Tip");
-            const msPerFrame = 17;
-            const gravity = 9.8;
-            const rubRate = 30;
             let interval = null;
             let currenDragBall = null;
 
@@ -19,11 +21,11 @@
                     this.dom = dom;
                     this.isDraging = false;
                     this.tragStartTime = 0;
-                    this.lastX = 0;
-                    this.lastY = 0;
+                    this.lastDomX = 0;
+                    this.lastDomY = 0;
                     this.xSpeed = 0;
                     this.ySpeed = 0;
-                    this.time = 0;
+                    this.fallTime = 0;
                     this.leftOffset = 0;
                     this.topOffset = 0;
                 }
@@ -68,8 +70,8 @@
                         this.topOffset = clientY-this.dom.offsetTop;
 
                         this.tragStartTime = Date.now();
-                        this.lastX = this.dom.offsetLeft;
-                        this.lastY = this.dom.offsetTop;
+                        this.lastDomX = this.dom.offsetLeft;
+                        this.lastDomY = this.dom.offsetTop;
                         console.log("mouse down");
                     }
                 };
@@ -79,13 +81,13 @@
                     console.log("mouse up");
                     const {clientX, clientY} = e;
                     this.isDraging = false;
-                    this.time = 0;
+                    this.fallTime = 0;
 
-                    let dragTotalTime = (Date.now()-this.tragStartTime)/1000;
-                    if (dragTotalTime >= 0.5)
+                    let dragTotalTime = msTime2STime(Date.now()-this.tragStartTime);
+                    if (dragTotalTime >= 0.8)
                         return;
-                    this.xSpeed = (this.dom.offsetLeft-this.lastX)/dragTotalTime;
-                    this.ySpeed = (this.dom.offsetTop-this.lastY)/dragTotalTime;
+                    this.xSpeed = (this.dom.offsetLeft-this.lastDomX)/dragTotalTime;
+                    this.ySpeed = transDomYSpead2Reality((this.dom.offsetTop-this.lastDomY)/dragTotalTime);
                 }
 
                 verticalMove(confilictBalls)
@@ -94,35 +96,37 @@
                         this.ySpeed += .7*otherBall.ySpeed;
                         otherBall.ySpeed = 0.3*otherBall.ySpeed;
                     }
-                    let {x, y} = this.transDom2Reality(this.dom.offsetLeft, this.dom.offsetTop);
-                    // console.log("vertical move y", y);
-                    if (y<=0) {
-                        this.time = 0;
+
+                    // const bottomOffset = getBottomBalls(this, confilictBalls).reduce((pre, curr) => {
+                    //     return pre + curr.dom.offsetHeight;
+                    // }, 0);
+                    // if (bottomOffset) {
+                    //     return console.log(bottomOffset);
+                    // }
+                    const bottomOffset = 0;
+
+                    const realityPos = this.getRealityPos();
+                    const realityX = realityPos.x;
+                    const realityY = realityPos.y;
+                    if (realityY <= bottomOffset) {
+                        this.fallTime = 0;
                         this.ySpeed = 0;
-                        this.dom.style.top = this.transReality2Dom(x, 0).y;
+                        this.updateDomYByRealityY(bottomOffset);
                         return;
                     }
-                    this.time += msPerFrame;
-                    let nY = 0;
-                    if (this.ySpeed==0) {
-                        nY = y - calcFallHeight(this.time/1000, gravity)
+                    this.fallTime += MS_PER_FRAME;
+                    let newRealityY = bottomOffset;
+                    if (Math.abs(this.ySpeed) <= 0.01) {
+                        this.ySpeed = 0;
+                        newRealityY = realityY - calcFallHeight(msTime2STime(this.fallTime), G)
                     } else {
-                        let nYSpeed = transDomYSpead2Reality(this.ySpeed);
-                        nY = y + nYSpeed*msPerFrame/1000 - calcFallHeight(this.time/1000, gravity);
-                        if (nYSpeed>0) {
-                            nYSpeed -= (gravity*msPerFrame/1000);
-                            if (nYSpeed <= 0)
-                                nYSpeed = 0;
-                        } else {
-                            nYSpeed += (gravity*msPerFrame/1000);
-                            if (nYSpeed >= 0)
-                                nYSpeed = 0;
-                        }
-                        
+                        newRealityY = realityY + this.ySpeed*FRAME_PERIOD - calcFallHeight(msTime2STime(this.fallTime), G);
+                        if (this.ySpeed>0) 
+                            this.ySpeed -= (G*FRAME_PERIOD);
+                        else
+                            this.ySpeed += (G*FRAME_PERIOD);
                     }
-
-                    this.dom.style.top = this.transReality2Dom(x, nY).y;
-
+                    this.updateDomYByRealityY(newRealityY);
                 };
 
                 horizontalMove(confilictBalls) 
@@ -135,16 +139,13 @@
 
                     if (this.dom.offsetLeft<=0) {
                         this.xSpeed = (0 -.3*this.xSpeed);
-                        // this.dom.style.left = 0;
-                        // return;
+                        
                     }
                     if (this.dom.offsetLeft+this.dom.offsetWidth >= body.clientWidth) {
                         this.xSpeed = (0 - .3*this.xSpeed);
-                        // this.dom.style.left = body.clientWidth-this.dom.offsetWidth;
-                        // return;
                     }
-                    let {x, y} = this.transDom2Reality(this.dom.offsetLeft, this.dom.offsetTop);
-                    let nLeft = this.dom.offsetLeft+((msPerFrame/1000)*this.xSpeed);
+                    let { x, y } = this.getRealityPos();
+                    let nLeft = this.dom.offsetLeft+((FRAME_PERIOD)*this.xSpeed);
                     if (nLeft<0)
                         nLeft = 0;
                     if (nLeft+this.dom.offsetWidth > body.clientWidth)
@@ -153,7 +154,7 @@
 
                     if (y<=0 && this.xSpeed) {
                         // console.log("摩擦", this.xSpeed);
-                        this.xSpeed = this.xSpeed>0 ? this.xSpeed-(msPerFrame/1000)*rubRate : this.xSpeed+(msPerFrame/1000)*rubRate;
+                        this.xSpeed = this.xSpeed>0 ? this.xSpeed-(FRAME_PERIOD)*RUB_RATE : this.xSpeed+(FRAME_PERIOD)*RUB_RATE;
                         if (Math.abs(this.xSpeed)<=0.5)
                             this.xSpeed = 0;
                     }
@@ -180,6 +181,30 @@
                         x: x,
                         y: body.clientHeight - (y+this.dom.offsetHeight),
                     }
+                }
+
+                trans2RealityY(domY) {
+                    return body.clientHeight - domY - this.dom.offsetHeight
+                }
+
+                trans2DomY(realityY) {
+                    return body.clientHeight - realityY - this.dom.offsetHeight;
+                }
+
+                getRealityPos() {
+                    return {
+                        x: this.dom.offsetLeft,
+                        y: this.trans2RealityY(this.dom.offsetTop),
+                    }
+                }
+                getDomPos() {
+                    return {
+                        x: this.dom.offsetLeft,
+                        y: this.dom.offsetTop,
+                    }
+                }
+                updateDomYByRealityY(realityY) {
+                    this.dom.style.top = this.trans2DomY(realityY);
                 }
             }
 
@@ -232,6 +257,10 @@
                 return new Ball(ballDom);
             }
 
+            function msTime2STime(msTime) {
+                return msTime/1000;
+            }
+
             function getDistance(pos0, pos1) {
                 return Math.sqrt((pos0.x-pos1.x)*(pos0.x-pos1.x) + (pos0.y-pos1.y)*(pos0.y-pos1.y));
             }
@@ -240,6 +269,20 @@
                 const pivoitPos0 = ball0.getCirclePivotPos();
                 const pivoitPos1 = ball1.getCirclePivotPos();
                 return getDistance(pivoitPos0, pivoitPos1) <= (ball0.getCircleRadius()+ball1.getCircleRadius());
+            }
+
+            function getBottomBalls(target, balls) {
+                return balls.filter(ball => 
+                {
+                    if (target==ball)
+                        return false;
+                    if (target.getRealityPos().y >= (ball.getRealityPos().y+ball.dom.offsetHeight))
+                        return false;
+                    const targetX = target.getRealityPos().x;
+                    const ballX = ball.getRealityPos().x;
+                    return (targetX<(ballX+ball.dom.offsetWidth) && targetX>ballX) || 
+                            (targetX+target.dom.offsetWidth)>ballX && (targetX+target.dom.offsetWidth < ballX+ball.dom.offsetWidth);
+                });
             }
 
             function start() {
@@ -259,7 +302,7 @@
                         }
                         ball.onUpdate(confilictBalls);
                     }
-                }, msPerFrame);
+                }, MS_PER_FRAME);
             } 
             start();
 
